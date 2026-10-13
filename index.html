@@ -131,7 +131,7 @@
     /* ── Scroll carousel ── */
     .carousel-section {
       min-height: auto;
-      height: 350vh; /* 4 cards, slightly compressed for snappier feel */
+      height: 350vh; /* JS overrides per breakpoint */
       position: relative;
     }
     .carousel-pin {
@@ -147,8 +147,10 @@
     }
     .carousel-track {
       display: flex;
+      flex-direction: row;
       gap: 3rem;
       will-change: transform;
+      align-items: center;
     }
     .carousel-track .product-card {
       min-width: min(420px, 80vw);
