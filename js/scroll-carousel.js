@@ -1,12 +1,14 @@
 /**
  * scroll-carousel.js
- * Scroll-driven horizontal carousel that works across desktop, tablet, and mobile.
+ * Scroll-driven horizontal carousel — desktop, tablet, mobile.
  *
  * Responsive strategy:
- * - Desktop (≥1024px): horizontal scroll carousel, one card at a time
- * - Tablet (600–1023px): horizontal carousel, cards slightly narrower
- * - Mobile (<600px): falls back to a vertical stacked list (no horizontal scroll),
- *   because horizontal swipe + vertical scroll is confusing on small screens
+ * - Desktop (≥1024px): horizontal scroll carousel
+ * - Tablet (600–1023px): horizontal carousel, narrower cards
+ * - Mobile (<600px): vertical stacked list (no horizontal scroll)
+ *
+ * Dead-zone is a fixed pixel buffer (not a percentage) so the "landing"
+ * time feels consistent regardless of section height / viewport size.
  */
 
 (function () {
@@ -17,20 +19,21 @@
 
   const cards = track.querySelectorAll(".product-card");
 
-  // Dead-zone: fraction of scrollable height to ignore at the start
-  const DEAD_ZONE = 0.15;
+  // Fixed pixel buffer: the carousel doesn't start until the user has
+  // scrolled this many pixels past the section's top edge.
+  // 200px ≈ one "screenful" of scroll on most devices.
+  const DEAD_ZONE_PX = 200;
 
-  // ── Responsive mode detection ──
+  // ── Responsive mode ──
   function getMode() {
     const w = window.innerWidth;
-    if (w < 600) return "vertical";   // mobile: stack vertically
-    if (w < 1024) return "tablet";   // tablet: horizontal, narrower cards
-    return "desktop";                // desktop: horizontal, full cards
+    if (w < 600) return "vertical";
+    if (w < 1024) return "tablet";
+    return "desktop";
   }
 
   let currentMode = getMode();
 
-  // ── Apply mode-specific styles ──
   function applyMode() {
     const mode = getMode();
 
@@ -38,22 +41,18 @@
       currentMode = mode;
 
       if (mode === "vertical") {
-        // Mobile: stack cards vertically, no horizontal scroll
         section.style.height = "auto";
         track.style.flexDirection = "column";
         track.style.transform = "none";
         track.style.gap = "1.5rem";
-        // Center cards
         cards.forEach((c) => {
           c.style.minWidth = "unset";
           c.style.width = "100%";
           c.style.maxWidth = "500px";
         });
-        // Hide progress dots (not relevant for vertical)
         const progressEl = document.getElementById("carousel-progress");
         if (progressEl) progressEl.style.display = "none";
       } else {
-        // Desktop / tablet: horizontal carousel
         section.style.height = mode === "tablet" ? "300vh" : "350vh";
         track.style.flexDirection = "row";
         track.style.gap = mode === "tablet" ? "2rem" : "3rem";
@@ -70,19 +69,14 @@
     return mode;
   }
 
-  // ── Total distance the track needs to travel ──
+  // ── Max translate ──
   function getMaxTranslate() {
-    // Measure the actual rendered width of the track
     const trackWidth = track.scrollWidth;
     const viewportWidth = window.innerWidth;
-    // We want to scroll until the last card is roughly centered
     const lastCard = cards[cards.length - 1];
     if (!lastCard) return 0;
     const lastCardWidth = lastCard.offsetWidth;
-    // Distance = total track width minus what fits in viewport,
-    // adjusted so the last card ends up centered
     const maxScroll = trackWidth - viewportWidth;
-    // Center the last card: add half the viewport minus half the last card
     const centerOffset = viewportWidth / 2 - lastCardWidth / 2;
     return Math.max(0, maxScroll - centerOffset + lastCardWidth / 2);
   }
@@ -92,7 +86,6 @@
   function update() {
     const mode = applyMode();
 
-    // Vertical mode: nothing to do
     if (mode === "vertical") {
       ticking = false;
       return;
@@ -105,25 +98,24 @@
 
     const scrollable = sectionHeight - viewportHeight;
     if (scrollable <= 0) {
-      // Section is shorter than viewport — no carousel needed
       track.style.transform = "none";
       ticking = false;
       return;
     }
 
-    const scrolled = -sectionTop;
+    const scrolled = -sectionTop; // px scrolled into the section
 
-    // Raw progress 0..1
-    const rawProgress = Math.max(0, Math.min(1, scrolled / scrollable));
+    // Fixed pixel dead-zone: first DEAD_ZONE_PX px of scroll = no movement
+    const effectiveScroll = Math.max(0, scrolled - DEAD_ZONE_PX);
+    const effectiveRange = scrollable - DEAD_ZONE_PX;
 
-    // Dead-zone
-    let progress;
-    if (rawProgress < DEAD_ZONE) {
-      progress = 0;
-    } else {
-      progress = (rawProgress - DEAD_ZONE) / (1 - DEAD_ZONE);
+    if (effectiveRange <= 0) {
+      track.style.transform = "none";
+      ticking = false;
+      return;
     }
-    progress = Math.max(0, Math.min(1, progress));
+
+    const progress = Math.max(0, Math.min(1, effectiveScroll / effectiveRange));
 
     // Smoothstep easing
     const eased = progress * progress * (3 - 2 * progress);
@@ -148,13 +140,11 @@
     }
   }, { passive: true });
 
-  // Re-apply on resize (handles orientation change, window resize)
   let resizeTimeout;
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(update, 100);
   });
 
-  // Initial
   update();
 })();
