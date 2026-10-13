@@ -4,6 +4,10 @@
  * The inner .carousel-pin is sticky, so the viewport "pins" while the
  * user scrolls through the section. Scroll progress maps to a horizontal
  * translate of the .carousel-track.
+ *
+ * A dead-zone at the top of the section means the carousel doesn't start
+ * moving until the user has scrolled a bit past the section's top edge,
+ * giving them a moment to "land" before the animation kicks in.
  */
 
 (function () {
@@ -13,20 +17,15 @@
   if (!section || !track) return;
 
   const cards = track.querySelectorAll(".product-card");
-  const GAP = 48; // matches CSS gap (3rem)
+
+  // Dead-zone: fraction of the scrollable height to ignore at the start.
+  // 0.12 = the first 12% of the section's scroll does nothing (user "lands").
+  const DEAD_ZONE = 0.12;
 
   // Total distance the track needs to travel
   function getMaxTranslate() {
     const trackWidth = track.scrollWidth;
     const viewportWidth = window.innerWidth;
-    // We want the last card centered, so:
-    // maxTranslate = trackWidth - viewportWidth/2 - cardWidth/2
-    const firstCard = cards[0];
-    const lastCard = cards[cards.length - 1];
-    if (!firstCard || !lastCard) return 0;
-    const firstRect = firstCard.getBoundingClientRect();
-    const lastRect = lastCard.getBoundingClientRect();
-    // Simpler: just use scrollWidth - viewportWidth
     return Math.max(0, trackWidth - viewportWidth + 80);
   }
 
@@ -38,13 +37,23 @@
     const sectionHeight = sectionRect.height;
     const viewportHeight = window.innerHeight;
 
-    // Progress: 0 when section top hits viewport top, 1 when section bottom hits viewport bottom
     const scrollable = sectionHeight - viewportHeight;
-    const scrolled = -sectionTop; // how far we've scrolled into the section
-    const progress = Math.max(0, Math.min(1, scrolled / scrollable));
+    const scrolled = -sectionTop;
 
-    // Ease the progress for a smoother feel
-    const eased = progress * progress * (3 - 2 * progress); // smoothstep
+    // Raw progress 0..1 across the full scrollable range
+    const rawProgress = Math.max(0, Math.min(1, scrolled / scrollable));
+
+    // Apply dead-zone: remap so the first DEAD_ZONE fraction = 0 progress
+    let progress;
+    if (rawProgress < DEAD_ZONE) {
+      progress = 0;
+    } else {
+      progress = (rawProgress - DEAD_ZONE) / (1 - DEAD_ZONE);
+    }
+    progress = Math.max(0, Math.min(1, progress));
+
+    // Ease with smoothstep for a gentle start and end
+    const eased = progress * progress * (3 - 2 * progress);
 
     const maxTranslate = getMaxTranslate();
     const translateX = -eased * maxTranslate;
